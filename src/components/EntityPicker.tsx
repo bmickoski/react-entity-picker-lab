@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
-export type EntityBase = { id: string | number; label: string; subLabel?: string };
+export type EntityBase = {
+  id: string | number;
+  label: string;
+  subLabel?: string;
+};
 
 type Props<T extends EntityBase> = {
   label?: string;
@@ -27,46 +31,71 @@ export function EntityPicker<T extends EntityBase>({
   minChars = 2,
 }: Props<T>) {
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const debounced = useDebouncedValue(input, debounceMs);
+
+  // query only (when open)
+  const [query, setQuery] = useState("");
+  const debounced = useDebouncedValue(query, debounceMs);
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<T[]>([]);
   const [error, setError] = useState<string | null>(null);
-
   const [activeIndex, setActiveIndex] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const displayValue = useMemo(() => {
-    if (open) return input;
-    return value?.label ?? input;
-  }, [open, value, input]);
+    return open ? query : (value?.label ?? "");
+  }, [open, query, value?.label]);
+
+  function close() {
+    setOpen(false);
+    setQuery("");
+    setItems([]);
+    setError(null);
+    setLoading(false);
+    setActiveIndex(0);
+    abortRef.current?.abort();
+  }
+
+  function select(item: T) {
+    onChange(item);
+    close();
+  }
+
+  function clear() {
+    onChange(null);
+    close();
+  }
 
   useEffect(() => {
     if (!open) return;
 
     const q = debounced.trim();
-    if (q.length < minChars) return;
+    if (q.length < minChars) {
+      abortRef.current?.abort();
+      setItems([]);
+      setError(null);
+      setLoading(false);
+      setActiveIndex(0);
+      return;
+    }
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        setLoading(true);
-        setError(null);
-      }
-    });
+    setLoading(true);
+    setError(null);
 
     search(q, controller.signal)
       .then((res) => {
+        if (controller.signal.aborted) return;
         setItems(res);
         setActiveIndex(0);
       })
       .catch((e: unknown) => {
+        if (controller.signal.aborted) return;
         if (e instanceof DOMException && e.name === "AbortError") return;
         setError("Failed to load results");
         setItems([]);
@@ -76,30 +105,17 @@ export function EntityPicker<T extends EntityBase>({
       });
 
     return () => controller.abort();
-  }, [debounced, minChars, open, search]);
+  }, [open, debounced, minChars, search]);
 
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
       if (!containerRef.current) return;
-      if (!containerRef.current.contains(e.target as Node)) setOpen(false);
+      if (!containerRef.current.contains(e.target as Node)) close();
     }
     document.addEventListener("mousedown", onDocMouseDown);
     return () => document.removeEventListener("mousedown", onDocMouseDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function select(item: T) {
-    onChange(item);
-    setOpen(false);
-    setInput(item.label);
-  }
-
-  function clear() {
-    onChange(null);
-    setInput("");
-    setItems([]);
-    setError(null);
-    setOpen(false);
-  }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open && (e.key === "ArrowDown" || e.key === "Enter")) {
@@ -109,7 +125,7 @@ export function EntityPicker<T extends EntityBase>({
     if (!open) return;
 
     if (e.key === "Escape") {
-      setOpen(false);
+      close();
       return;
     }
 
@@ -143,18 +159,8 @@ export function EntityPicker<T extends EntityBase>({
           placeholder={placeholder}
           onFocus={() => setOpen(true)}
           onChange={(e) => {
-            const next = e.target.value;
-            setInput(next);
             setOpen(true);
-
-            const q = next.trim();
-            if (q.length < minChars) {
-              abortRef.current?.abort();
-              setItems([]);
-              setError(null);
-              setLoading(false);
-              setActiveIndex(0);
-            }
+            setQuery(e.target.value);
           }}
           onKeyDown={onKeyDown}
           className={[
@@ -167,12 +173,14 @@ export function EntityPicker<T extends EntityBase>({
 
         <button
           type="button"
-          disabled={disabled || (!value && !input)}
+          disabled={disabled || !value}
           onClick={clear}
           className={[
             "rounded-xl border border-white/15 px-3 py-2 text-sm text-white/80",
             "hover:bg-white/10 hover:text-white",
-            disabled || (!value && !input) ? "cursor-not-allowed opacity-60 hover:bg-transparent" : "cursor-pointer",
+            disabled || !value
+              ? "cursor-not-allowed opacity-60 hover:bg-transparent"
+              : "cursor-pointer",
           ].join(" ")}
         >
           Clear
@@ -182,7 +190,7 @@ export function EntityPicker<T extends EntityBase>({
       {open && (
         <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-neutral-950/60 backdrop-blur">
           <div className="border-b border-white/10 px-3 py-2 text-xs text-white/70">
-            {input.trim().length < minChars
+            {query.trim().length < minChars
               ? `Type at least ${minChars} characters…`
               : loading
                 ? "Loading…"
@@ -209,7 +217,9 @@ export function EntityPicker<T extends EntityBase>({
                 ].join(" ")}
               >
                 <div className="text-sm text-white">{it.label}</div>
-                {it.subLabel && <div className="text-xs text-white/60">{it.subLabel}</div>}
+                {it.subLabel && (
+                  <div className="text-xs text-white/60">{it.subLabel}</div>
+                )}
               </div>
             ))}
           </div>

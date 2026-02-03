@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 export type EntityBase = { id: string | number; label: string; subLabel?: string };
@@ -39,10 +39,13 @@ export function useEntityMultiPicker<T extends EntityBase>({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // activeIndex is over "options" (create row + items)
+  // activeIndex is over "options" (create row + visible items)
   const [activeIndex, setActiveIndex] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
+
+  // ✅ track last query to avoid resetting activeIndex all the time
+  const lastQueryRef = useRef<string>("");
 
   const selectedIds = useMemo(() => new Set(value.map((v) => String(v.id))), [value]);
   const canSelectMore = maxSelected == null ? true : value.length < maxSelected;
@@ -73,41 +76,55 @@ export function useEntityMultiPicker<T extends EntityBase>({
   const hasCreateRow = canCreate;
   const totalOptions = visibleItems.length + (hasCreateRow ? 1 : 0);
 
-  function resetResults() {
+  const resetResults = useCallback(() => {
     abortRef.current?.abort();
     setItems([]);
     setError(null);
     setLoading(false);
     setActiveIndex(0);
-  }
+  }, []);
 
-  // Network effect: only searches
   useEffect(() => {
     if (!open) return;
 
     const q = debounced.trim();
-    if (q.length < minChars) return;
+
+    // IMPORTANT: when query becomes short, clear stale state
+    if (q.length < minChars) {
+      abortRef.current?.abort();
+      setItems([]);
+      setError(null);
+      setLoading(false);
+      setActiveIndex(0);
+      lastQueryRef.current = q;
+      return;
+    }
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        setLoading(true);
-        setError(null);
-      }
-    });
+    const isNewQuery = q !== lastQueryRef.current;
+    lastQueryRef.current = q;
+
+    setLoading(true);
+    setError(null);
 
     search(q, controller.signal)
       .then((res) => {
+        if (controller.signal.aborted) return;
         setItems(res);
-        setActiveIndex(0);
+
+        // ✅ reset highlight only when query changes
+        if (isNewQuery) setActiveIndex(0);
       })
       .catch((e: unknown) => {
+        if (controller.signal.aborted) return;
         if (e instanceof DOMException && e.name === "AbortError") return;
+
         setError("Failed to load results");
         setItems([]);
+        setActiveIndex(0);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -121,10 +138,14 @@ export function useEntityMultiPicker<T extends EntityBase>({
     if (selectedIds.has(String(item.id))) return;
 
     onChange([...value, item]);
-    setInput("");
+
+    // optional: flash selected label
+    setInput(item.label);
+    window.setTimeout(() => setInput(""), 120);
+
     resetResults();
-    setOpen(true);
   }
+
 
   function removeById(id: string | number) {
     onChange(value.filter((v) => String(v.id) !== String(id)));
@@ -222,14 +243,12 @@ export function useEntityMultiPicker<T extends EntityBase>({
   })();
 
   return {
-    // state
     open,
     input,
     loading,
     error,
     activeIndex,
 
-    // derived
     trimmed,
     selectedIds,
     visibleItems,
@@ -238,7 +257,6 @@ export function useEntityMultiPicker<T extends EntityBase>({
     hasCreateRow,
     statusText,
 
-    // actions
     setOpen,
     setInput,
     setActiveIndex,
@@ -248,7 +266,6 @@ export function useEntityMultiPicker<T extends EntityBase>({
     clearAll,
     createAndAdd,
 
-    // handlers
     onKeyDown,
     resetResults,
   };

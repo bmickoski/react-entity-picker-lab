@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 type Metrics = {
   lastMs: number | null;
@@ -17,11 +17,11 @@ export function useSearchMetrics() {
     aborted: 0,
   });
 
-  function onStart() {
+  const onStart = useCallback(() => {
     startRef.current = performance.now();
-  }
+  }, []);
 
-  function onSuccess(resultCount: number) {
+  const onSuccess = useCallback((resultCount: number) => {
     const end = performance.now();
     const start = startRef.current;
 
@@ -31,29 +31,24 @@ export function useSearchMetrics() {
       success: m.success + 1,
       aborted: m.aborted,
     }));
-  }
+  }, []);
 
-  function onAbort() {
-    setMetrics((m) => ({
-      ...m,
-      aborted: m.aborted + 1,
-    }));
-  }
+  const onAbort = useCallback(() => {
+    setMetrics((m) => ({ ...m, aborted: m.aborted + 1 }));
+  }, []);
 
-  function reset() {
+  const reset = useCallback(() => {
     setMetrics({
       lastMs: null,
       lastCount: null,
       success: 0,
       aborted: 0,
     });
-  }
+  }, []);
 
-  return {
-    metrics,
-    onStart,
-    onSuccess,
-    onAbort,
-    reset,
-  };
+  // optional: stable return shape
+  return useMemo(
+    () => ({ metrics, onStart, onSuccess, onAbort, reset }),
+    [metrics, onStart, onSuccess, onAbort, reset]
+  );
 }
