@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   DndContext,
@@ -7,13 +7,15 @@ import {
   useSensor,
   useSensors,
   closestCenter,
+  DragOverlay,
   type DragEndEvent,
-  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -75,15 +77,30 @@ function SortableIssue(props: { issue: Issue; onOpen: () => void }) {
   );
 }
 
+function parseDropStatus(id: string | null): IssueStatus | null {
+  if (!id) return null;
+  return id.startsWith("status:")
+    ? (id.replace("status:", "") as IssueStatus)
+    : null;
+}
+
+function normalizeOrders(list: Issue[]) {
+  // Stable step spacing (easy re-normalize, avoids float drift)
+  return list.map((it, idx) => ({ ...it, order: (idx + 1) * 1000 }));
+}
+
 export function BoardPage() {
   const navigate = useNavigate();
-  const params = useParams<{ boardId: string; view?: string }>();
+  const params = useParams<{ boardId: string; sprintId?: string }>();
 
   const boardId = params.boardId ?? "";
-  const view = (params.view ?? "sprint") as "sprint" | "backlog";
+  const sprintId = params.sprintId ?? null;
+  const view: "backlog" | "sprint" = sprintId ? "sprint" : "backlog";
 
   // --- Store reads ---
   const issues = useJiraStore((s) => s.issues);
+  const sprints = useJiraStore((s) => s.sprints);
+
   const selectedIssueId = useJiraStore((s) => s.selectedIssueId);
   const draftIssue = useJiraStore((s) => s.draftIssue);
 
@@ -96,6 +113,10 @@ export function BoardPage() {
   const saveDraft = useJiraStore((s) => s.saveDraft);
 
   const updateIssue = useJiraStore((s) => s.updateIssue);
+  const applyIssueChanges = useJiraStore((s) => s.applyIssueChanges);
+
+  // --- DnD state ---
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -103,12 +124,21 @@ export function BoardPage() {
   );
 
   // --- Derived ---
-  const boardIssues = useMemo(() => {
+  const activeSprint = useMemo(
+    () => sprints.find((sp) => sp.boardId === boardId && sp.isActive) ?? null,
+    [sprints, boardId],
+  );
+
+  const scopedIssues = useMemo(() => {
     return issues
-      .filter((i) => i.boardId === boardId)
+      .filter(
+        (i) =>
+          i.boardId === boardId &&
+          (view === "backlog" ? i.sprintId == null : i.sprintId === sprintId),
+      )
       .slice()
       .sort((a, b) => a.order - b.order);
-  }, [issues, boardId]);
+  }, [issues, boardId, sprintId, view]);
 
   const selectedIssue = useMemo(
     () =>
@@ -119,31 +149,32 @@ export function BoardPage() {
   );
 
   const issuesByStatus = useMemo(() => {
-    const map: Record<IssueStatus, Issue[]> = {
+    const base: Record<IssueStatus, Issue[]> = {
       backlog: [],
       todo: [],
       in_progress: [],
       done: [],
     };
 
-    for (const it of boardIssues) {
-      if (view === "backlog") {
-        if (it.status === "backlog") map.backlog.push(it);
-      } else {
-        if (it.status !== "backlog") map[it.status].push(it);
-      }
+    for (const it of scopedIssues) base[it.status].push(it);
+    for (const k of Object.keys(base) as IssueStatus[]) {
+      base[k].sort((a, b) => a.order - b.order);
     }
+    return base;
+  }, [scopedIssues]);
 
-    // already sorted by order globally; but keep safe:
-    for (const k of Object.keys(map) as IssueStatus[]) {
-      map[k].sort((a, b) => a.order - b.order);
-    }
+  const activeIssue = useMemo(
+    () =>
+      activeId ? (scopedIssues.find((x) => x.id === activeId) ?? null) : null,
+    [activeId, scopedIssues],
+  );
 
-    return map;
-  }, [boardIssues, view]);
+  const canShowStatus = (s: IssueStatus) =>
+    view === "backlog" ? s === "backlog" : s !== "backlog";
 
   // --- People (rehydration) ---
   const useBig = true;
+
   const personIndex = useMemo(() => {
     const data = getPeopleDataset(useBig);
     return buildPersonIndex(data);
@@ -194,6 +225,7 @@ export function BoardPage() {
     return res.map(mapPerson);
   };
 
+  // --- Header actions ---
   function onBack() {
     navigate("/boards");
   }
@@ -201,72 +233,85 @@ export function BoardPage() {
     navigate(`/boards/${boardId}/backlog`);
   }
   function onSprint() {
-    navigate(`/boards/${boardId}/sprint`);
+    if (activeSprint) navigate(`/boards/${boardId}/sprints/${activeSprint.id}`);
+    else navigate(`/boards/${boardId}/backlog`);
   }
   function onNewIssue() {
     const seedStatus: IssueStatus = view === "backlog" ? "backlog" : "todo";
-    openNewIssue({ boardId, sprintId: null, status: seedStatus });
+    openNewIssue({ boardId, sprintId, status: seedStatus });
   }
 
-  function parseDropStatus(overId: string | number | null): IssueStatus | null {
-    if (!overId) return null;
-    const s = String(overId);
-    if (s.startsWith("status:")) return s.replace("status:", "") as IssueStatus;
-    return null;
-  }
-
-  function getIssueStatusById(
-    all: Issue[],
-    issueId: string,
-  ): IssueStatus | null {
-    const it = all.find((x) => x.id === issueId);
-    return it?.status ?? null;
-  }
-
-  const onDragOver = (e: DragOverEvent) => {
-    const activeId = String(e.active.id);
-    const overId = e.over?.id ? String(e.over.id) : null;
-    if (!overId) return;
-
-    const active = issues.find((x) => x.id === activeId);
-    if (!active) return;
-
-    // Determine target status:
-    // - if hovering a column -> "status:todo"
-    // - if hovering an item -> use that item’s status
-    let targetStatus = parseDropStatus(overId);
-    if (!targetStatus) {
-      const overIssueStatus = getIssueStatusById(issues, overId);
-      targetStatus = overIssueStatus;
-    }
-    if (!targetStatus) return;
-
-    // view guard
-    if (view === "backlog" && targetStatus !== "backlog") return;
-    if (view === "sprint" && targetStatus === "backlog") return;
-
-    if (active.status !== targetStatus) {
-      updateIssue(activeId, { status: targetStatus });
-    }
+  // --- DnD handlers (IMPORTANT: no list projection during drag) ---
+  const onDragStart = (e: DragStartEvent) => {
+    setActiveId(String(e.active.id));
   };
 
   const onDragEnd = (e: DragEndEvent) => {
-    const activeId = String(e.active.id);
-    const overId = e.over?.id ? String(e.over.id) : null;
-    if (!overId) return;
+    const aId = String(e.active.id);
+    const oId = e.over?.id ? String(e.over.id) : null;
 
-    let targetStatus = parseDropStatus(overId);
-    if (!targetStatus) targetStatus = getIssueStatusById(issues, overId);
-    if (!targetStatus) return;
+    setActiveId(null);
+    if (!oId) return;
 
-    const active = issues.find((x) => x.id === activeId);
+    const active = scopedIssues.find((x) => x.id === aId);
     if (!active) return;
 
-    if (active.status !== targetStatus) {
-      updateIssue(activeId, { status: targetStatus });
+    // target status can be column OR issue
+    let targetStatus = parseDropStatus(oId);
+    const overIssue = scopedIssues.find((x) => x.id === oId) ?? null;
+    if (!targetStatus) targetStatus = overIssue?.status ?? null;
+    if (!targetStatus) return;
+
+    // view guards
+    if (!canShowStatus(targetStatus)) return;
+
+    const from = active.status;
+    const to = targetStatus;
+
+    const fromList = issuesByStatus[from].slice();
+    const toList = issuesByStatus[to].slice();
+
+    // remove active from lists
+    const fromWithout = fromList.filter((x) => x.id !== aId);
+    let toNext = toList.filter((x) => x.id !== aId);
+
+    // moved issue (status changes when crossing columns)
+    const moved: Issue = { ...active, status: to };
+
+    // insert into target
+    if (overIssue && overIssue.status === to) {
+      const overIdx = toNext.findIndex((x) => x.id === overIssue.id);
+      const insertAt = overIdx < 0 ? toNext.length : overIdx;
+      toNext.splice(insertAt, 0, moved);
+    } else {
+      toNext.push(moved);
     }
 
-    // later: reorder within column using order + arrayMove
+    // same-column reorder
+    if (from === to && overIssue) {
+      const oldIndex = toNext.findIndex((x) => x.id === aId);
+      const newIndex = toNext.findIndex((x) => x.id === overIssue.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        toNext = arrayMove(toNext, oldIndex, newIndex);
+      }
+    }
+
+    const normalizedTo = normalizeOrders(toNext);
+    const normalizedFrom = from === to ? [] : normalizeOrders(fromWithout);
+
+    const changes: Array<{ id: string; patch: Partial<Issue> }> = [];
+
+    for (const it of normalizedTo) {
+      changes.push({
+        id: it.id,
+        patch: { status: it.status, order: it.order },
+      });
+    }
+    for (const it of normalizedFrom) {
+      changes.push({ id: it.id, patch: { order: it.order } });
+    }
+
+    applyIssueChanges(changes);
   };
 
   return (
@@ -279,6 +324,11 @@ export function BoardPage() {
             <div className="text-3xl font-semibold tracking-tight">Board</div>
             <div className="mt-1 text-sm text-white/60">
               View: {view === "backlog" ? "Backlog" : "Sprint board"}
+              {view === "sprint" && activeSprint ? (
+                <span className="ml-2 text-white/40">
+                  • {activeSprint.name}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -327,15 +377,12 @@ export function BoardPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={onDragStart}
+              onDragCancel={() => setActiveId(null)}
               onDragEnd={onDragEnd}
-              onDragOver={onDragOver}
             >
               <div className="grid gap-4 lg:grid-cols-4">
-                {STATUSES.filter((s) =>
-                  view === "backlog"
-                    ? s.key === "backlog"
-                    : s.key !== "backlog",
-                ).map((col) => {
+                {STATUSES.filter((s) => canShowStatus(s.key)).map((col) => {
                   const colIssues = issuesByStatus[col.key];
                   const ids = colIssues.map((x) => x.id);
 
@@ -368,6 +415,15 @@ export function BoardPage() {
                   );
                 })}
               </div>
+
+              {/* Smooth drag without mutating lists during drag */}
+              <DragOverlay>
+                {activeIssue ? (
+                  <div className="w-[320px]">
+                    <IssueCard issue={activeIssue} onOpen={() => {}} />
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </div>
 
@@ -404,7 +460,7 @@ export function BoardPage() {
                     />
                   </div>
 
-                  {/* Assignee + Watchers (stacked) */}
+                  {/* Assignee + Watchers */}
                   <div className="grid gap-4">
                     {/* Assignee */}
                     <div className="w-full">
