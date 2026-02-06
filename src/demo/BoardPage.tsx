@@ -130,7 +130,7 @@ export function BoardPage() {
   const openNewIssue = useJiraStore((s) => s.openNewIssue);
   const updateDraft = useJiraStore((s) => s.updateDraft);
   const discardDraft = useJiraStore((s) => s.discardDraft);
-  const saveDraft = useJiraStore((s) => s.saveDraft);
+  // const saveDraft = useJiraStore((s) => s.saveDraft);
 
   const sprints = useJiraStore((s) => s.sprints);
   const activeSprint = useMemo(
@@ -611,7 +611,7 @@ export function BoardPage() {
 
                     <button
                       type="button"
-                      onClick={saveDraft}
+                      // onClick={saveDraft}
                       disabled={!draftIssue.title.trim()}
                       className={[
                         "rounded-xl border border-white/15 px-3 py-2 text-sm",
