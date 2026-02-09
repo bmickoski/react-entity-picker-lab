@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -17,7 +17,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 
-import { SortableIssue } from "./SortableIssue";
 import {
   parseDropStatus,
   normalizeOrders,
@@ -26,6 +25,7 @@ import {
 import { DroppableColumn } from "./DroppableColumn";
 import type { Issue, IssueStatus } from "../../domain/types";
 import { IssueCard } from "./IssueCard";
+import { VirtualIssueList } from "./VirtualIssueList";
 
 const STATUSES: Array<{ key: IssueStatus; title: string }> = [
   { key: "backlog", title: "Backlog" },
@@ -34,7 +34,7 @@ const STATUSES: Array<{ key: IssueStatus; title: string }> = [
   { key: "done", title: "Done" },
 ];
 
-export function BoardColumns(props: {
+export const BoardColumns = React.memo(function BoardColumns(props: {
   view: "backlog" | "sprint";
   issues: Issue[];
   onOpenIssue: (id: string) => void;
@@ -88,16 +88,22 @@ export function BoardColumns(props: {
 
   const onDragEnd = (e: DragEndEvent) => {
     const aId = String(e.active.id);
-    const oId = e.over?.id ? String(e.over.id) : null;
+    const rawOverId = e.over?.id ? String(e.over.id) : null;
 
     setActiveId(null);
+
+    // If the pointer left the board, sometimes `over` is null.
+    // We can optionally fall back to lastOverIdRef.
+    const oId = rawOverId ?? lastOverIdRef.current;
     if (!oId) return;
 
     const active = scopedIssues.find((x) => x.id === aId);
     if (!active) return;
 
+    // With virtualization, the "over issue" may not be mounted -> null.
     const overIssue = scopedIssues.find((x) => x.id === oId) ?? null;
 
+    // Determine destination status from column id or over issue status
     let toStatus = parseDropStatus(oId);
     if (!toStatus) toStatus = overIssue?.status ?? null;
     if (!toStatus) return;
@@ -118,12 +124,16 @@ export function BoardColumns(props: {
 
     // SAME COLUMN reorder
     if (fromStatus === toStatus) {
-      if (!overIssue) return;
       const list = fromList;
-
       const oldIndex = list.findIndex((x) => x.id === aId);
-      const newIndex = list.findIndex((x) => x.id === overIssue.id);
-      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+      if (oldIndex < 0) return;
+
+      // If overIssue is missing (virtualized), treat "drop on column" as move to end
+      const newIndex = overIssue
+        ? list.findIndex((x) => x.id === overIssue.id)
+        : list.length - 1;
+
+      if (newIndex < 0 || oldIndex === newIndex) return;
 
       const next = arrayMove(list, oldIndex, newIndex);
       const normalized = normalizeOrders(next);
@@ -139,6 +149,9 @@ export function BoardColumns(props: {
     const moved: Issue = { ...active, status: toStatus };
 
     const toNext = toList.filter((x) => x.id !== aId);
+
+    // If we’re over an issue, insert before it.
+    // If we’re over the column (or virtualized row not mounted), insert at end.
     const insertAt = overIssue
       ? Math.max(
           0,
@@ -194,19 +207,13 @@ export function BoardColumns(props: {
                   items={ids}
                   strategy={verticalListSortingStrategy}
                 >
-                  {colIssues.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-white/10 p-3 text-sm text-white/40">
-                      No issues
-                    </div>
-                  ) : (
-                    colIssues.map((it) => (
-                      <SortableIssue
-                        key={it.id}
-                        issue={it}
-                        onOpen={() => onOpenIssue(it.id)}
-                      />
-                    ))
-                  )}
+                  <VirtualIssueList
+                    issues={colIssues}
+                    onOpenIssue={onOpenIssue}
+                    estimateSize={118}
+                    overscan={10}
+                    maxHeightPx={560}
+                  />
                 </SortableContext>
               </DroppableColumn>
             );
@@ -227,4 +234,4 @@ export function BoardColumns(props: {
       ) : null}
     </div>
   );
-}
+});

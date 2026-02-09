@@ -1,13 +1,10 @@
-import type {
-  DraggableAttributes,
-  DraggableSyntheticListeners,
-} from "@dnd-kit/core";
+import React from "react";
 import type { Issue } from "../../domain/types";
+import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 
-export function IssueCard(props: {
+export const IssueCard = React.memo(function IssueCard(props: {
   issue: Issue;
   onOpen: () => void;
-
   dragHandleProps?: {
     listeners: DraggableSyntheticListeners;
     attributes: DraggableAttributes;
@@ -16,13 +13,7 @@ export function IssueCard(props: {
   const { issue, dragHandleProps } = props;
 
   return (
-    <div
-      className={[
-        "w-full rounded-xl border border-white/10 bg-black/30 p-3",
-        "hover:bg-white/5 hover:border-white/15",
-        "focus-within:ring-2 focus-within:ring-white/20",
-      ].join(" ")}
-    >
+    <div className="w-full rounded-xl border border-white/10 bg-black/30 p-3 hover:bg-white/5 hover:border-white/15">
       <div className="flex items-start justify-between gap-3">
         <button
           type="button"
@@ -35,7 +26,6 @@ export function IssueCard(props: {
           </div>
         </button>
 
-        {/* Drag handle */}
         {dragHandleProps ? (
           <button
             type="button"
@@ -46,11 +36,10 @@ export function IssueCard(props: {
             {...dragHandleProps.attributes}
             {...dragHandleProps.listeners}
           >
-            {/* simple “grip” icon */}
             <span className="text-base leading-none">⋮⋮</span>
           </button>
         ) : null}
       </div>
     </div>
   );
-}
+});

@@ -70,3 +70,21 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+/* hide scrollbar but keep scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+/* Subtle scrollbars (Chromium/Edge/Safari) */
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 10px;
+}
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255) 
+}

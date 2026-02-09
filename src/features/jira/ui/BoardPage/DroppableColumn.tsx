@@ -1,6 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
+import React from "react";
 
-export function DroppableColumn(props: {
+function DroppableColumnImpl(props: {
   id: string;
   title: string;
   count: number;
@@ -21,7 +22,22 @@ export function DroppableColumn(props: {
         <div className="text-xs text-white/50">{props.count}</div>
       </div>
 
-      <div className="grid gap-2">{props.children}</div>
+      {/* Scroll viewport (Jira-like) */}
+      <div
+        className={[
+          "grid gap-2 overflow-y-auto",
+          "pr-2", // reserve space so scrollbar doesn't cover cards
+          "max-h-[520px]", // tweak per layout (or use calc below)
+          "scrollbar-thin", // if you have plugin; otherwise remove
+        ].join(" ")}
+        style={{
+          scrollbarGutter: "stable", // prevents layout shift when scrollbar appears
+        }}
+      >
+        {props.children}
+      </div>
     </div>
   );
 }
+
+export const DroppableColumn = React.memo(DroppableColumnImpl);

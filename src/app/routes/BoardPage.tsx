@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   useBatchPatchIssues,
@@ -7,10 +7,11 @@ import {
   usePatchIssue,
 } from "@/features/jira/api";
 import { QueryState, BoardColumns, IssueSidePanel } from "@/features/jira/ui";
-import type { IssueStatus } from "@/features/jira/domain";
+import type { Issue, IssueStatus } from "@/features/jira/domain";
 import { nextOrderForStatus } from "@/features/jira/domain";
 import { useJiraStore } from "@/features/jira/store";
 import { usePeopleSearch } from "@/features/jira/people";
+import { useShallow } from "zustand/shallow";
 
 export function BoardPage() {
   const navigate = useNavigate();
@@ -28,22 +29,46 @@ export function BoardPage() {
     error: issuesErrorObj,
   } = useIssues(boardId, sprintId);
 
+  const {
+    selectedIssueId,
+    draftIssue,
+    openIssue,
+    closeIssue,
+    openNewIssue,
+    updateDraft,
+    discardDraft,
+    clearDraftAfterCreate,
+    sprints,
+  } = useJiraStore(
+    useShallow((s) => ({
+      selectedIssueId: s.selectedIssueId,
+      draftIssue: s.draftIssue,
+      openIssue: s.openIssue,
+      closeIssue: s.closeIssue,
+      openNewIssue: s.openNewIssue,
+      updateDraft: s.updateDraft,
+      discardDraft: s.discardDraft,
+      clearDraftAfterCreate: s.clearDraftAfterCreate,
+      sprints: s.sprints,
+    })),
+  );
+
   const batchPatch = useBatchPatchIssues(boardId, sprintId);
   const patchIssue = usePatchIssue(boardId, sprintId);
   const createIssue = useCreateIssue(boardId, sprintId);
 
-  const selectedIssueId = useJiraStore((s) => s.selectedIssueId);
-  const draftIssue = useJiraStore((s) => s.draftIssue);
+  // const selectedIssueId = useJiraStore((s) => s.selectedIssueId);
+  // const draftIssue = useJiraStore((s) => s.draftIssue);
 
-  const openIssue = useJiraStore((s) => s.openIssue);
-  const closeIssue = useJiraStore((s) => s.closeIssue);
+  // const openIssue = useJiraStore((s) => s.openIssue);
+  // const closeIssue = useJiraStore((s) => s.closeIssue);
 
-  const openNewIssue = useJiraStore((s) => s.openNewIssue);
-  const updateDraft = useJiraStore((s) => s.updateDraft);
-  const discardDraft = useJiraStore((s) => s.discardDraft);
-  const clearDraftAfterCreate = useJiraStore((s) => s.clearDraftAfterCreate);
+  // const openNewIssue = useJiraStore((s) => s.openNewIssue);
+  // const updateDraft = useJiraStore((s) => s.updateDraft);
+  // const discardDraft = useJiraStore((s) => s.discardDraft);
+  // const clearDraftAfterCreate = useJiraStore((s) => s.clearDraftAfterCreate);
 
-  const sprints = useJiraStore((s) => s.sprints);
+  // const sprints = useJiraStore((s) => s.sprints);
   const activeSprint = useMemo(
     () => sprints.find((sp) => sp.boardId === boardId && sp.isActive) ?? null,
     [sprints, boardId],
@@ -102,6 +127,14 @@ export function BoardPage() {
     const seedStatus: IssueStatus = view === "backlog" ? "backlog" : "todo";
     openNewIssue({ boardId, sprintId, status: seedStatus });
   }
+
+  const onBatchPatch = useCallback(
+    (changes: Array<{ id: string; patch: Partial<Issue> }>) =>
+      batchPatch.mutate(changes),
+    [batchPatch],
+  );
+
+  const onOpenIssue = useCallback((id: string) => openIssue(id), [openIssue]);
 
   return (
     <div className="min-h-screen w-full bg-neutral-950 text-white">
@@ -164,8 +197,8 @@ export function BoardPage() {
                 view={view}
                 issues={issues}
                 isSaving={batchPatch.isPending}
-                onOpenIssue={openIssue}
-                onBatchPatch={(changes) => batchPatch.mutate(changes)}
+                onOpenIssue={onOpenIssue}
+                onBatchPatch={onBatchPatch}
               ></BoardColumns>
             </QueryState>
           </div>

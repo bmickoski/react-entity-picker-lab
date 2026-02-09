@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   EntityPicker,
   type EntityBase,
@@ -8,7 +8,7 @@ import type { Issue, IssueDraft } from "../../domain/types";
 
 type PersonEntity = EntityBase & { raw: object };
 
-export function IssueSidePanel(props: {
+export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
   // Draft mode
   draftIssue: IssueDraft | null;
   onUpdateDraft: (patch: Partial<IssueDraft>) => void;
@@ -104,9 +104,6 @@ export function IssueSidePanel(props: {
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5 overflow-visible">
-      {/* --------------------- */}
-      {/* Draft mode */}
-      {/* --------------------- */}
       {draftIssue ? (
         <>
           <div className="text-xs text-white/50">New issue</div>
@@ -373,4 +370,4 @@ export function IssueSidePanel(props: {
       )}
     </div>
   );
-}
+});
