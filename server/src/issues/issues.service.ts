@@ -64,7 +64,8 @@ export class IssuesService {
     if ("watcherIds" in patch) data.watcherIds = patch.watcherIds;
 
     if ("sprintId" in patch) {
-      (data as any).sprintId = patch.sprintId;
+      const next = patch.sprintId ?? null;
+      data.sprint = next ? { connect: { id: next } } : { disconnect: true };
 
       // moving BACK TO BACKLOG
       if (patch.sprintId === null) {
@@ -105,11 +106,11 @@ export class IssuesService {
     if ("watcherIds" in patch) data.watcherIds = patch.watcherIds;
 
     if ("sprintId" in patch) {
-      data.sprintId = patch.sprintId;
-
       if (patch.sprintId === null) {
+        data.sprint = { disconnect: true };
         data.status = IssueStatus.backlog;
       } else {
+        data.sprint = { connect: { id: patch.sprintId } };
         data.status = IssueStatus.todo;
       }
     }
