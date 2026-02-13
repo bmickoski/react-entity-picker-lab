@@ -20,7 +20,8 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
   // Selected mode
   selectedIssue: Issue | null;
   onPatchIssue: (args: { id: string; patch: Partial<Issue> }) => void;
-
+  view: "backlog" | "sprint";
+  activeSprint: Sprint | null;
   // Other
   onClose: () => void;
 
@@ -359,7 +360,7 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
             <div className="w-full">
               <div className="mb-1.5 text-sm text-white/80">Move</div>
 
-              <div className="grid gap-2">
+              {props.view === "sprint" ? (
                 <button
                   type="button"
                   disabled={selectedIssue.sprintId == null}
@@ -373,8 +374,31 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                 >
                   Move to Backlog
                 </button>
+              ) : props.activeSprint ? (
+                <button
+                  type="button"
+                  disabled={selectedIssue.sprintId === props.activeSprint.id}
+                  onClick={() =>
+                    onMoveIssue(selectedIssue.id, props.activeSprint!.id)
+                  }
+                  className={[
+                    "rounded-xl border border-white/15 px-3 py-2 text-sm",
+                    selectedIssue.sprintId === props.activeSprint.id
+                      ? "cursor-not-allowed bg-white/5 text-white/40"
+                      : "bg-white/10 text-white hover:bg-white/15",
+                  ].join(" ")}
+                >
+                  Move to {props.activeSprint.name}
+                </button>
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white/60">
+                  No active sprint yet. Create one to move issues into sprint.
+                </div>
+              )}
 
-                <div className="grid gap-2">
+              {/* Optional: keep "Move to specific sprint" list, but only in sprint view or only show active */}
+              {props.view === "sprint" ? (
+                <div className="mt-2 grid gap-2">
                   {props.sprints.map((sp) => (
                     <button
                       key={sp.id}
@@ -388,14 +412,14 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                           : "bg-white/10 text-white hover:bg-white/15",
                       ].join(" ")}
                     >
-                      <span>{sp.name}</span>
+                      <span className="truncate">{sp.name}</span>
                       {sp.isActive ? (
                         <span className="text-xs text-white/60">active</span>
                       ) : null}
                     </button>
                   ))}
                 </div>
-              </div>
+              ) : null}
             </div>
 
             <div className="mt-2 flex justify-end">

@@ -23,8 +23,8 @@ export class IssuesController {
       description?: string;
       status: IssueStatus;
       order: number;
-      assigneeId?: string | null;
-      watcherIds?: string[];
+      assigneeId?: string | number | null;
+      watcherIds?: Array<string | number>;
     },
   ) {
     return this.service.create(body);

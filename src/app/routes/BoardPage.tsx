@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   useBatchPatchIssues,
   useCreateIssue,
+  useCreateSpringt,
   useIssues,
   useMoveIssue,
   usePatchIssue,
@@ -53,6 +54,7 @@ export default function BoardPage() {
     })),
   );
 
+  const createSprint = useCreateSpringt(boardId);
   const batchPatch = useBatchPatchIssues(boardId, sprintId);
   const patchIssue = usePatchIssue(boardId, sprintId);
   const createIssue = useCreateIssue(boardId, sprintId);
@@ -79,6 +81,17 @@ export default function BoardPage() {
     },
     [moveIssue, closeIssue],
   );
+
+  function onCreateSprint() {
+    createSprint.mutate(
+      { name: `Sprint ${sprints.length + 1}` },
+      {
+        onSuccess: (sp) => {
+          navigate(`/boards/${boardId}/sprints/${sp.id}`);
+        },
+      },
+    );
+  }
 
   const scopedIssues = useMemo(() => {
     return issues.slice().sort((a, b) => a.order - b.order);
@@ -179,6 +192,16 @@ export default function BoardPage() {
               Sprint
             </button>
 
+            {!activeSprint ? (
+              <button
+                type="button"
+                onClick={() => onCreateSprint()}
+                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/15 hover:text-white"
+              >
+                + Create Sprint
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={onNewIssue}
@@ -201,7 +224,7 @@ export default function BoardPage() {
             >
               <BoardColumns
                 view={view}
-                issues={issues}
+                issues={scopedIssues}
                 isSaving={batchPatch.isPending}
                 onOpenIssue={onOpenIssue}
                 onBatchPatch={onBatchPatch}
@@ -209,6 +232,8 @@ export default function BoardPage() {
             </QueryState>
           </div>
           <IssueSidePanel
+            view={view}
+            activeSprint={activeSprint}
             draftIssue={draftIssue}
             selectedIssue={selectedIssue}
             isCreating={createIssue.isPending}

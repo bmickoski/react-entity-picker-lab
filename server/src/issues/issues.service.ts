@@ -25,8 +25,8 @@ export class IssuesService {
     description?: string;
     status: IssueStatus;
     order: number;
-    assigneeId?: string | null;
-    watcherIds?: string[];
+    assigneeId?: string | number | null;
+    watcherIds?: Array<string | number>;
   }) {
     const count = await this.prisma.issue.count({
       where: { boardId: input.boardId },
@@ -43,8 +43,8 @@ export class IssuesService {
         description: input.description ?? "",
         status: input.status,
         order: input.order,
-        assigneeId: input.assigneeId ?? null,
-        watcherIds: input.watcherIds ?? [],
+        assigneeId: input.assigneeId == null ? null : String(input.assigneeId),
+        watcherIds: (input.watcherIds ?? []).map(String),
       },
     });
   }
@@ -60,8 +60,11 @@ export class IssuesService {
     if ("description" in patch) data.description = patch.description;
     if ("status" in patch) data.status = patch.status;
     if ("order" in patch) data.order = patch.order;
-    if ("assigneeId" in patch) data.assigneeId = patch.assigneeId;
-    if ("watcherIds" in patch) data.watcherIds = patch.watcherIds;
+    if ("assigneeId" in patch)
+      data.assigneeId =
+        patch.assigneeId == null ? null : String(patch.assigneeId);
+    if ("watcherIds" in patch)
+      data.watcherIds = (patch.watcherIds ?? []).map(String);
 
     if ("sprintId" in patch) {
       const next = patch.sprintId ?? null;

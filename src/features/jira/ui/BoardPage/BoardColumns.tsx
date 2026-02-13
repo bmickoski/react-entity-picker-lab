@@ -191,7 +191,7 @@ export const BoardColumns = React.memo(function BoardColumns(props: {
         }}
         onDragEnd={onDragEnd}
       >
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-4 min-w-0">
           {STATUSES.filter((s) => canShowStatus(view, s.key)).map((col) => {
             const colIssues = issuesByStatus[col.key];
             const ids = colIssues.map((x) => x.id);

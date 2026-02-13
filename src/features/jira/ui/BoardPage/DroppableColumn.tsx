@@ -34,7 +34,7 @@ function DroppableColumnImpl(props: {
           scrollbarGutter: "stable", // prevents layout shift when scrollbar appears
         }}
       >
-        {props.children}
+        <div className="min-w-0 overflow-x-hidden">{props.children}</div>
       </div>
     </div>
   );

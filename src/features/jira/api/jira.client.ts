@@ -71,4 +71,10 @@ export const jiraClient = {
       body: JSON.stringify({ sprintId: args.sprintId } satisfies Json),
     });
   },
+  createSprint(boardId: string, args: { name: string }) {
+    return http<Sprint>(`/boards/${boardId}/sprints`, {
+      method: "POST",
+      body: JSON.stringify(args),
+    });
+  },
 };

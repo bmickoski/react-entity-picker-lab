@@ -18,10 +18,10 @@ export const IssueCard = React.memo(function IssueCard(props: {
         <button
           type="button"
           onClick={props.onOpen}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-left overflow-x-hidden"
         >
-          <div className="text-xs text-white/50">{issue.key}</div>
-          <div className="mt-1 font-medium text-white leading-snug">
+          <div className="text-xs text-white/50 truncate">{issue.key}</div>
+          <div className="mt-1 font-medium text-white leading-snug truncate">
             {issue.title}
           </div>
         </button>

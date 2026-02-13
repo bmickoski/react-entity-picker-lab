@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { jiraClient } from "./jira.client";
-import type { Board, Issue } from "../domain/types";
+import type { Board, Issue, Sprint } from "../domain/types";
 
 type IssueChange = { id: string; patch: Partial<Issue> };
 type CreateIssueInput = Omit<Issue, "id" | "key">;
@@ -234,6 +234,16 @@ export function useMoveIssue(boardId: string, sprintId: string | null) {
 
       // also invalidate BOTH backlog and sprint list because move crosses scopes
       qc.invalidateQueries({ queryKey: ["issues", boardId] });
+    },
+  });
+}
+
+export function useCreateSpringt(boardId: string) {
+  const qc = useQueryClient();
+  return useMutation<Sprint, Error, { name: string }>({
+    mutationFn: (args) => jiraClient.createSprint(boardId, args),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: jiraKeys.sprints(boardId) });
     },
   });
 }
