@@ -162,7 +162,9 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                       ? null
                       : toPersonEntity(draftIssue.assigneeId)
                   }
-                  onChange={(p) => onUpdateDraft({ assigneeId: p?.id ?? null })}
+                  onChange={(p) =>
+                    onUpdateDraft({ assigneeId: p ? String(p.id) : null })
+                  }
                   search={searchPeople}
                   minChars={2}
                   debounceMs={250}
@@ -194,7 +196,7 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                   placeholder="Search people…"
                   value={(draftIssue.watcherIds ?? []).map(toPersonEntity)}
                   onChange={(next) =>
-                    onUpdateDraft({ watcherIds: next.map((x) => x.id) })
+                    onUpdateDraft({ watcherIds: next.map((x) => String(x.id)) })
                   }
                   search={searchPeople}
                   minChars={2}
@@ -301,7 +303,7 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                   onChange={(p) =>
                     onPatchIssue({
                       id: selectedIssue.id,
-                      patch: { assigneeId: p?.id ?? null },
+                      patch: { assigneeId: p ? String(p.id) : null },
                     })
                   }
                   search={searchPeople}
@@ -342,7 +344,7 @@ export const IssueSidePanel = React.memo(function IssueSidePanel(props: {
                   onChange={(next) =>
                     onPatchIssue({
                       id: selectedIssue.id,
-                      patch: { watcherIds: next.map((x) => x.id) },
+                      patch: { watcherIds: next.map((x) => String(x.id)) },
                     })
                   }
                   search={searchPeople}
