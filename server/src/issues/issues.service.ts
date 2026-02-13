@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { IssueStatus, Prisma } from "@prisma/client";
+import { IssueStatus, Prisma } from "../../generated/prisma/client";
 
 type GetIssuesArgs = { boardId: string; sprintId: string | null };
 
@@ -64,7 +64,7 @@ export class IssuesService {
     if ("watcherIds" in patch) data.watcherIds = patch.watcherIds;
 
     if ("sprintId" in patch) {
-      data.sprintId = patch.sprintId;
+      (data as any).sprintId = patch.sprintId;
 
       // moving BACK TO BACKLOG
       if (patch.sprintId === null) {

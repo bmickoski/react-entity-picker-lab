@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { IssueStatus } from "@prisma/client";
+import { IssueStatus } from "../../generated/prisma/client";
 
 const ORDER_STEP = 1000;
 

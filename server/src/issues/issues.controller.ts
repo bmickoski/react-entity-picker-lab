@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
-import { IssueStatus } from "@prisma/client";
+import { IssueStatus } from "../../generated/prisma/client";
 
 @Controller("issues")
 export class IssuesController {
