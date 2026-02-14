@@ -238,12 +238,25 @@ export function useMoveIssue(boardId: string, sprintId: string | null) {
   });
 }
 
-export function useCreateSpringt(boardId: string) {
+export function useCreateSprint(boardId: string) {
   const qc = useQueryClient();
   return useMutation<Sprint, Error, { name: string }>({
     mutationFn: (args) => jiraClient.createSprint(boardId, args),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: jiraKeys.sprints(boardId) });
+    },
+  });
+}
+
+export function useSetActiveSprint(boardId: string) {
+  const qc = useQueryClient();
+  return useMutation<Sprint, Error, { sprintId: string }>({
+    mutationFn: (args) => jiraClient.setActiveSprint(boardId, args.sprintId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: jiraKeys.sprints(boardId) });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["issues", boardId] });
     },
   });
 }

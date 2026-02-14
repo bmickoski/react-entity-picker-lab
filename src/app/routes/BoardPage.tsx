@@ -3,10 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   useBatchPatchIssues,
   useCreateIssue,
-  useCreateSpringt,
+  useCreateSprint,
   useIssues,
   useMoveIssue,
   usePatchIssue,
+  useSetActiveSprint,
   useSprints,
 } from "@/features/jira/api";
 import { QueryState, BoardColumns, IssueSidePanel } from "@/features/jira/ui";
@@ -54,7 +55,8 @@ export default function BoardPage() {
     })),
   );
 
-  const createSprint = useCreateSpringt(boardId);
+  const createSprint = useCreateSprint(boardId);
+  const setActiveSprint = useSetActiveSprint(boardId);
   const batchPatch = useBatchPatchIssues(boardId, sprintId);
   const patchIssue = usePatchIssue(boardId, sprintId);
   const createIssue = useCreateIssue(boardId, sprintId);
@@ -87,7 +89,14 @@ export default function BoardPage() {
       { name: `Sprint ${sprints.length + 1}` },
       {
         onSuccess: (sp) => {
-          navigate(`/boards/${boardId}/sprints/${sp.id}`);
+          setActiveSprint.mutate(
+            { sprintId: sp.id },
+            {
+              onSuccess: () => {
+                navigate(`/boards/${boardId}/sprints/${sp.id}`);
+              },
+            },
+          );
         },
       },
     );

@@ -36,6 +36,11 @@ export class BoardsService {
   ) {
     const isActive = !!args.isActive;
 
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+    });
+    if (!board) throw new NotFoundException("Board not found");
+
     return this.prisma.$transaction(async (tx) => {
       if (isActive) {
         await tx.sprint.updateMany({
@@ -49,7 +54,13 @@ export class BoardsService {
     });
   }
 
-  setActiveSprint(boardId: string, sprintId: string) {
+  async setActiveSprint(boardId: string, sprintId: string) {
+    // ✅ ensure sprint belongs to board
+    const sprint = await this.prisma.sprint.findFirst({
+      where: { id: sprintId, boardId },
+    });
+    if (!sprint) throw new NotFoundException("Sprint not found for this board");
+
     return this.prisma.$transaction(async (tx) => {
       await tx.sprint.updateMany({
         where: { boardId, isActive: true },
@@ -62,6 +73,7 @@ export class BoardsService {
     });
   }
 
+  // moveIssue unchanged...
   async moveIssue(
     boardId: string,
     id: string,
@@ -72,17 +84,15 @@ export class BoardsService {
       throw new NotFoundException("Issue not found");
     }
 
-    const fromSprintId = issue.sprintId; // can be null
+    const fromSprintId = issue.sprintId;
     const fromStatus = issue.status;
 
     const toSprintId = body.sprintId ?? null;
 
-    // Default status rules (simple Jira behavior)
     const toStatus =
       (body.status as IssueStatus | undefined) ??
       (toSprintId ? IssueStatus.todo : IssueStatus.backlog);
 
-    // If nothing changes, just return current list
     if (fromSprintId === toSprintId && fromStatus === toStatus) {
       return this.prisma.issue.findMany({
         where: { boardId, sprintId: toSprintId },
@@ -90,7 +100,6 @@ export class BoardsService {
       });
     }
 
-    // Load affected columns (only the columns that change)
     const [fromList, toList] = await Promise.all([
       this.prisma.issue.findMany({
         where: { boardId, sprintId: fromSprintId, status: fromStatus },
@@ -104,7 +113,6 @@ export class BoardsService {
 
     const fromWithout = fromList.filter((x) => x.id !== id);
 
-    // insert at end for now (you can support insert index later)
     const toNext = [
       ...toList,
       { ...issue, sprintId: toSprintId, status: toStatus },
@@ -114,7 +122,6 @@ export class BoardsService {
     const normalizedTo = normalizeOrders(toNext);
 
     await this.prisma.$transaction([
-      // Update moved issue with new sprint/status/order (from normalizedTo)
       this.prisma.issue.update({
         where: { id },
         data: {
@@ -123,16 +130,12 @@ export class BoardsService {
           order: normalizedTo.find((x) => x.id === id)!.order,
         },
       }),
-
-      // Reorder remaining in from column
       ...normalizedFrom.map((it) =>
         this.prisma.issue.update({
           where: { id: it.id },
           data: { order: it.order },
         }),
       ),
-
-      // Reorder all in to column (excluding moved issue already set above is OK too)
       ...normalizedTo
         .filter((it) => it.id !== id)
         .map((it) =>
@@ -143,7 +146,6 @@ export class BoardsService {
         ),
     ]);
 
-    // Return canonical list for the TARGET sprint (the UI will invalidate both sides)
     return this.prisma.issue.findMany({
       where: { boardId, sprintId: toSprintId },
       orderBy: [{ status: "asc" }, { order: "asc" }],
